@@ -1,302 +1,137 @@
-import { useEffect, useMemo, useState, type ChangeEvent } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import CountryCard from '../components/CountryCard'
-import type { CountryDetails, CountryListItem } from '../types/Country'
+import { fetchCountryDetails, fetchCountryList } from '../api/countries'
+import { localizedCountryName, localizedRegion, useTranslation } from '../i18n'
+import type { CountryDetails, CountryOption, RegionFilter, SearchRecord } from '../types/Country'
 
-type CountriesProps = {
-  onSearch: (country: CountryDetails) => void
-  onAddFavorite: (country: CountryDetails) => void
+interface CountriesProps {
+  history: SearchRecord[]
+  addHistory: (record: SearchRecord) => void
   favorites: CountryDetails[]
+  toggleFavorite: (country: CountryDetails) => void
 }
 
-type CountryApiRecord = {
-  name: {
-    common: string
-  }
-  cca2?: string
-  cca3?: string
-  capital?: string[]
-  region?: string
-  population?: number
-  area?: number
-}
+const regions: RegionFilter[] = ['All regions', 'Africa', 'Americas', 'Asia', 'Europe', 'Oceania', 'Antarctic']
 
-type PopulationEstimate = {
-  population: number
-  year: number
-  source: string
-}
+export default function Countries({ history, addHistory, favorites, toggleFavorite }: CountriesProps) {
+  const { language, t } = useTranslation()
+  const [countries, setCountries] = useState<CountryOption[]>([])
+  const [countriesLoading, setCountriesLoading] = useState(true)
+  const [countriesError, setCountriesError] = useState('')
+  const [listRetry, setListRetry] = useState(0)
+  const [region, setRegion] = useState<RegionFilter>('All regions')
+  const [selectedCode, setSelectedCode] = useState('')
+  const [country, setCountry] = useState<CountryDetails | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState('')
 
-type PopulationLookup = Record<string, PopulationEstimate>
+  useEffect(() => {
+    const controller = new AbortController()
+    setCountriesLoading(true)
+    setCountriesError('')
+    fetchCountryList(controller.signal)
+      .then(setCountries)
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) setCountriesError(error instanceof Error ? error.message : 'Failed to load countries.')
+      })
+      .finally(() => { if (!controller.signal.aborted) setCountriesLoading(false) })
+    return () => controller.abort()
+  }, [listRetry])
 
-const regionOptions = ['All', 'Africa', 'Americas', 'Asia', 'Europe', 'Oceania']
-const countrySource = '/countries.json'
-const populationSource = '/populations.json'
-
-const mapCountryResponse = (
-  apiCountry: CountryApiRecord,
-  population: PopulationEstimate | undefined,
-): CountryDetails => {
-  const countryCode = (apiCountry.cca2 ?? apiCountry.cca3 ?? '').toLowerCase()
-
-  return {
-    name: apiCountry.name.common,
-    capital: apiCountry.capital?.[0] ?? 'N/A',
-    region: apiCountry.region ?? 'N/A',
-    population: population?.population ?? null,
-    populationYear: population?.year ?? null,
-    populationSource: population?.source ?? null,
-    area: apiCountry.area ?? 0,
-    flags: {
-      png: countryCode ? `https://flagcdn.com/w320/${countryCode}.png` : '',
-      alt: `${apiCountry.name.common} flag`,
-    },
-  }
-}
-
-const fetchJson = async <T,>(source: string): Promise<T> => {
-  const response = await fetch(source)
-
-  if (!response.ok) {
-    throw new Error(`Failed to load ${source}`)
-  }
-
-  return (await response.json()) as T
-}
-
-const fetchCountryByName = async (countryName: string): Promise<CountryApiRecord> => {
-  const countryData = await fetchJson<CountryApiRecord[]>(countrySource)
-  const match = countryData.find(
-    (country) =>
-      country.name.common.toLowerCase() === countryName.toLowerCase() ||
-      country.cca2?.toLowerCase() === countryName.toLowerCase(),
+  const visibleCountries = useMemo(
+    () => countries.filter((item) => region === 'All regions' || item.region === region),
+    [countries, region],
   )
 
-  if (!match) {
-    throw new Error('Country not found')
-  }
-
-  return match
-}
-
-export default function Countries({ onSearch, onAddFavorite, favorites }: CountriesProps) {
-  const [countries, setCountries] = useState<CountryListItem[]>([])
-  const [populationEstimates, setPopulationEstimates] = useState<PopulationLookup>({})
-  const [regionFilter, setRegionFilter] = useState('All')
-  const [selectedCountry, setSelectedCountry] = useState('')
-  const [countryInfo, setCountryInfo] = useState<CountryDetails | null>(null)
-  const [loadingCountries, setLoadingCountries] = useState(true)
-  const [loadingCountry, setLoadingCountry] = useState(false)
-  const [error, setError] = useState('')
-
   useEffect(() => {
-    let ignore = false
-
-    const loadCountries = async () => {
-      try {
-        setLoadingCountries(true)
-        setError('')
-
-        const [countryList, populationData] = await Promise.all([
-          fetchJson<CountryApiRecord[]>(countrySource),
-          fetchJson<PopulationLookup>(populationSource),
-        ])
-        const formattedCountries = countryList
-          .map((country) => ({
-            name: country.name.common,
-            cca2: country.cca2 ?? '',
-            region: country.region ?? 'Unknown',
-          }))
-          .sort((a, b) => a.name.localeCompare(b.name))
-
-        if (!ignore) {
-          setCountries(formattedCountries)
-          setPopulationEstimates(populationData)
-          setSelectedCountry((current) =>
-            current && formattedCountries.some((item) => item.name === current)
-              ? current
-              : formattedCountries[0]?.name ?? '',
-          )
-        }
-      } catch {
-        if (!ignore) {
-          setError('Failed to load available countries.')
-        }
-      } finally {
-        if (!ignore) {
-          setLoadingCountries(false)
-        }
-      }
-    }
-
-    void loadCountries()
-
-    return () => {
-      ignore = true
-    }
-  }, [])
-
-  const filteredCountries = useMemo(() => {
-    if (regionFilter === 'All') {
-      return countries
-    }
-
-    return countries.filter((country) => country.region === regionFilter)
-  }, [countries, regionFilter])
-
-  useEffect(() => {
-    if (!filteredCountries.length) {
-      setSelectedCountry('')
-      setCountryInfo(null)
+    if (!selectedCode) {
+      setCountry(null)
+      setDetailError('')
+      setDetailLoading(false)
       return
     }
+    const selected = countries.find((item) => item.cca2 === selectedCode)
+    if (!selected) return
 
-    if (!filteredCountries.some((country) => country.name === selectedCountry)) {
-      setSelectedCountry(filteredCountries[0].name)
-    }
-  }, [filteredCountries, selectedCountry])
-
-  useEffect(() => {
-    if (!selectedCountry) {
-      return
-    }
-
-    let ignore = false
-
-    const loadCountry = async () => {
-      try {
-        setLoadingCountry(true)
-        setError('')
-
-        const countryData = await fetchCountryByName(selectedCountry)
-        const country = mapCountryResponse(
-          countryData,
-          populationEstimates[countryData.cca3 ?? ''],
-        )
-
-        if (!ignore) {
-          setCountryInfo(country)
-          onSearch(country)
+    const controller = new AbortController()
+    setDetailLoading(true)
+    setDetailError('')
+    fetchCountryDetails(selected.cca2, controller.signal)
+      .then((details) => {
+        setCountry(details)
+        addHistory({
+          id: `${Date.now()}-${details.cca2}`,
+          searchedAt: new Date().toISOString(),
+          country: details.name,
+          cca2: details.cca2,
+          capital: details.capital.join(', ') || 'Not listed',
+          region: details.region,
+        })
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setCountry(null)
+          setDetailError(error instanceof Error ? error.message : 'Failed to load country information.')
         }
-      } catch {
-        if (!ignore) {
-          setError('Failed to load country information')
-        }
-      } finally {
-        if (!ignore) {
-          setLoadingCountry(false)
-        }
-      }
-    }
+      })
+      .finally(() => { if (!controller.signal.aborted) setDetailLoading(false) })
+    return () => controller.abort()
+  }, [selectedCode, countries, addHistory])
 
-    void loadCountry()
-
-    return () => {
-      ignore = true
-    }
-  }, [onSearch, populationEstimates, selectedCountry])
-
-  const handleRegionChange = (event: ChangeEvent<HTMLSelectElement>) => {
-    setRegionFilter(event.target.value)
-  }
+  const isFavorite = country ? favorites.some((item) => item.cca2 === country.cca2) : false
+  const latestSearch = history[0]
+  const locale = language === 'he' ? 'he-IL' : language === 'ar' ? 'ar' : 'en'
 
   return (
-    <section className="page-section">
-      <div className="page-heading">
-        <div>
-          <p className="section-kicker">A world of discovery</p>
-          <h1>Explore countries</h1>
-          <p className="page-description">
-            Find a place, learn the details, and save the ones you love.
-          </p>
+    <main className="page-shell">
+      <section className="hero">
+        <div className="hero-copy">
+          <span className="eyebrow hero-eyebrow">{t('heroEyebrow')}</span>
+          <h1>{t('heroTitleOne')}<br /><em>{t('heroTitleTwo')}</em></h1>
+          <p>{t('heroDescription')}</p>
+          <div className="hero-meta"><span className="meta-icon">✳</span><span>{t('exploreAtPace')}</span><span className="meta-divider">·</span><span>{t('poweredBy')}</span></div>
         </div>
-        <div className="globe-scene" aria-hidden="true">
-          <div className="globe-orbit globe-orbit-one" />
-          <div className="globe-orbit globe-orbit-two" />
-          <svg className="globe" viewBox="0 0 180 180" fill="none">
-            <defs>
-              <radialGradient id="oceanGradient" cx="35%" cy="28%" r="78%">
-                <stop offset="0" stopColor="#8fc4ff" />
-                <stop offset=".52" stopColor="#3177df" />
-                <stop offset="1" stopColor="#153d92" />
-              </radialGradient>
-              <linearGradient id="landGradient" x1="40" y1="48" x2="132" y2="134">
-                <stop offset="0" stopColor="#fff1d6" />
-                <stop offset="1" stopColor="#e6b873" />
-              </linearGradient>
-              <clipPath id="globeClip">
-                <circle cx="90" cy="90" r="68" />
-              </clipPath>
-            </defs>
-            <circle cx="90" cy="90" r="68" fill="url(#oceanGradient)" />
-            <g className="globe-lines" clipPath="url(#globeClip)">
-              <ellipse cx="90" cy="90" rx="31" ry="68" />
-              <ellipse cx="90" cy="90" rx="58" ry="68" />
-              <path d="M18 90h144M28 64c36 17 88 17 124 0M28 116c36-17 88-17 124 0" />
-              <path className="globe-land" d="m48 54 13-9 11 3 5 9-8 5-3 12-8 4-5 12-8-3-4-15 5-7-6-6 8-5Zm25 38 10 2 8 8-4 12-8 5-3 15-8-4-5-14 5-9-4-8 9-7Zm29-44 9-8 17 2 8 9 15 1 7 7-7 9-13-3-10 8-10-2-4 10-9 3-5-8 5-11-7-6 4-11Zm30 56 10-4 12 7-3 10-12 6-7-7-8 2-4-8 12-6Z" />
-            </g>
-            <circle cx="90" cy="90" r="68" stroke="rgba(255,255,255,.68)" strokeWidth="1.5" />
-            <path d="M39 48c19-20 49-30 79-24" stroke="rgba(255,255,255,.58)" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          <span className="globe-label">EXPLORE THE WORLD</span>
+        <div className="hero-art" role="img" aria-label={t('globeLabel')}>
+          <div className="orbit orbit-one" /><div className="orbit orbit-two" />
+          <div className="globe"><div className="globe-latitude latitude-one" /><div className="globe-latitude latitude-two" /><div className="globe-longitude" /><span className="globe-land land-one" /><span className="globe-land land-two" /><span className="globe-land land-three" /></div>
+          <span className="spark spark-one">✦</span><span className="spark spark-two">✳</span><span className="globe-caption">{t('globeLabel')}</span>
         </div>
-      </div>
+      </section>
 
-      <div className="controls-panel">
-        <div className="controls-heading">
-          <span className="controls-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M4 7h16M7 12h10m-7 5h4" />
-              <circle cx="8" cy="7" r="1.5" />
-              <circle cx="15" cy="12" r="1.5" />
-              <circle cx="11" cy="17" r="1.5" />
-            </svg>
-          </span>
-          <div>
-            <strong>Start exploring</strong>
-            <span>Choose a region and a country</span>
-          </div>
+      <section className="explorer-section" aria-labelledby="explorer-title">
+        <div className="section-heading">
+          <div><span className="eyebrow">{t('startExploring')}</span><h2 id="explorer-title">{t('chooseDestination')}</h2></div>
+          <div className="live-badge"><span className="status-dot" /> {t('dataReady')}</div>
         </div>
-        <label className="select-group">
-          <span>Filter by region</span>
-          <select value={regionFilter} onChange={handleRegionChange}>
-            {regionOptions.map((region) => (
-              <option key={region} value={region}>
-                {region}
-              </option>
-            ))}
-          </select>
-        </label>
+        <div className="search-panel">
+          <label className="select-field country-field"><span className="field-label">{t('country')}</span>
+            <select aria-label={t('country')} value={selectedCode} onChange={(event) => setSelectedCode(event.target.value)} disabled={countriesLoading || Boolean(countriesError)}>
+              <option value="">{countriesLoading ? t('loadingCountries') : t('chooseCountry')}</option>
+              {visibleCountries.map((item) => <option key={item.cca2} value={item.cca2}>{localizedCountryName(item.cca2, item.name, language)}</option>)}
+            </select>
+          </label>
+          <label className="select-field region-field"><span className="field-label">{t('filterRegion')}</span>
+            <select aria-label={t('filterRegion')} value={region} onChange={(event) => setRegion(event.target.value as RegionFilter)}>
+              {regions.map((item) => <option key={item} value={item}>{item === 'All regions' ? t('allRegions') : localizedRegion(item, language)}</option>)}
+            </select>
+          </label>
+          <div className="result-count"><span className="count-number">{countriesLoading ? '—' : new Intl.NumberFormat(locale).format(visibleCountries.length)}</span><span>{t('countriesToDiscover')}</span></div>
+        </div>
+        {countriesError && <div className="alert alert-error" role="alert"><span>!</span><div><strong>{t('countryListError')}</strong><p>{t('genericError')}</p><button className="text-button" type="button" onClick={() => setListRetry((attempt) => attempt + 1)}>{t('tryAgain')}</button></div></div>}
 
-        <label className="select-group">
-          <span>Select a country</span>
-          <select
-            value={selectedCountry}
-            onChange={(event) => setSelectedCountry(event.target.value)}
-            disabled={loadingCountries || filteredCountries.length === 0}
-          >
-            {filteredCountries.map((country) => (
-              <option key={`${country.name}-${country.cca2}`} value={country.name}>
-                {country.name}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+        <div className="result-area" aria-live="polite">
+          {detailLoading && <div className="loading-card"><span className="spinner" /><div><strong>{t('gatheringDetails')}</strong><p>{t('findingStory')}</p></div></div>}
+          {detailError && <div className="alert alert-error" role="alert"><span>!</span><div><strong>{t('countryInfoError')}</strong><p>{t('genericError')}</p></div></div>}
+          {country && !detailLoading && <CountryCard country={country} isFavorite={isFavorite} onToggleFavorite={toggleFavorite} />}
+          {!country && !detailLoading && !detailError && !countriesError && <div className="welcome-card"><div className="welcome-icon">⌖</div><div><span className="eyebrow">{t('nextDiscovery')}</span><h3>{t('worldWaiting')}</h3><p>{t('chooseCountryDetails')}</p></div><span className="welcome-decoration" aria-hidden="true">✳</span></div>}
+        </div>
+      </section>
 
-      {loadingCountries ? <div className="loading-state">Loading...</div> : null}
-      {error ? <div className="error-state">{error}</div> : null}
-
-      {!loadingCountries && !error && loadingCountry ? (
-        <div className="loading-state">Loading...</div>
-      ) : null}
-
-      {!loadingCountries && !loadingCountry && !error && countryInfo ? (
-        <CountryCard
-          country={countryInfo}
-          isFavorite={favorites.some((country) => country.name === countryInfo.name)}
-          onAddFavorite={onAddFavorite}
-        />
-      ) : null}
-    </section>
+      <section className="below-grid">
+        <div className="note-card"><span className="eyebrow">{t('didYouKnow')}</span><p><strong>195+</strong> {t('countryCountText')}</p><span className="note-spark" aria-hidden="true">✳</span></div>
+        <div className="recent-card"><div><span className="eyebrow">{t('yourJourney')}</span><h3>{t('recentDiscoveries')}</h3></div>{latestSearch ? <div className="recent-detail"><span className="recent-marker">↗</span><div><strong>{localizedCountryName(latestSearch.cca2 ?? '', latestSearch.country, language)}</strong><span>{latestSearch.capital} · {localizedRegion(latestSearch.region, language)}</span></div></div> : <p className="muted-copy">{t('firstDiscovery')}</p>}</div>
+      </section>
+      <footer className="page-footer"><span>{t('madeCurious')}</span><span>{t('dataCourtesy')}</span></footer>
+    </main>
   )
 }

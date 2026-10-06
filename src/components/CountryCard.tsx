@@ -1,89 +1,50 @@
 import type { CountryDetails } from '../types/Country'
+import { localizedCountryName, localizedRegion, useTranslation } from '../i18n'
 
-type CountryCardProps = {
-  country: CountryDetails | null
+interface CountryCardProps {
+  country: CountryDetails
   isFavorite?: boolean
-  onAddFavorite?: (country: CountryDetails) => void
-  onRemoveFavorite?: (countryName: string) => void
+  onToggleFavorite?: (country: CountryDetails) => void
+  compact?: boolean
 }
 
-const formatNumber = (value: number | null) =>
-  value === null ? 'Not available' : new Intl.NumberFormat('en-US').format(value)
-
-export default function CountryCard({
-  country,
-  isFavorite = false,
-  onAddFavorite,
-  onRemoveFavorite,
-}: CountryCardProps) {
-  if (!country) {
-    return <div className="empty-state">No country selected.</div>
-  }
-
-  const handleFavoriteClick = () => {
-    if (isFavorite) {
-      onRemoveFavorite?.(country.name)
-      return
-    }
-
-    onAddFavorite?.(country)
-  }
+export default function CountryCard({ country, isFavorite = false, onToggleFavorite, compact = false }: CountryCardProps) {
+  const { language, t } = useTranslation()
+  const locale = language === 'he' ? 'he-IL' : language === 'ar' ? 'ar' : 'en'
+  const numberFormat = new Intl.NumberFormat(locale)
+  const displayName = localizedCountryName(country.cca2, country.name, language)
 
   return (
-    <article className="country-card">
-      <div className="country-header">
+    <article className={`country-card${compact ? ' country-card-compact' : ''}`}>
+      <div className="country-card-topline">
+        <span className="eyebrow">{t('countryProfile')}</span>
+        {onToggleFavorite && (
+          <button
+            className={`favorite-button${isFavorite ? ' is-favorite' : ''}`}
+            type="button"
+            onClick={() => onToggleFavorite(country)}
+            aria-label={isFavorite ? `${t('removeFavorite')}: ${displayName}` : `${t('addFavorite')}: ${displayName}`}
+            title={isFavorite ? t('removeFavorite') : t('addFavorite')}
+          >
+            {isFavorite ? '♥' : '♡'}
+          </button>
+        )}
+      </div>
+      <div className="country-identity">
         <div>
-          <p className="eyebrow">Country overview</p>
-          <h2>{country.name}</h2>
-          <span className="region-chip">{country.region}</span>
+          <h2>{displayName}</h2>
+          <p className="official-name">{country.officialName}</p>
         </div>
-        <button
-          type="button"
-          className="favorite-button"
-          onClick={handleFavoriteClick}
-        >
-          {isFavorite ? 'Remove' : 'Add to Favorites'}
-        </button>
+        <span className="country-code">{country.cca2}</span>
       </div>
-
-      <div className="country-info">
-        <div className="flag-box">
-          <img src={country.flags.png} alt={country.flags.alt} loading="lazy" />
-        </div>
-
-        <div className="country-details">
-          <div className="country-detail">
-            <span>Capital</span>
-            <strong>{country.capital}</strong>
-          </div>
-          <div className="country-detail">
-            <span>Region</span>
-            <strong>{country.region}</strong>
-          </div>
-          <div className="country-detail">
-            <span>Population</span>
-            <strong>
-              {formatNumber(
-                country.population === 0 && !country.populationYear
-                  ? null
-                  : country.population,
-              )}
-            </strong>
-            {country.populationYear && country.populationSource ? (
-              <small className="population-year">
-                {country.populationSource} · {country.populationYear}
-              </small>
-            ) : country.population === null ||
-              (country.population === 0 && !country.populationYear) ? (
-              <small className="population-year">Estimate unavailable</small>
-            ) : null}
-          </div>
-          <div className="country-detail">
-            <span>Land area</span>
-            <strong>{formatNumber(country.area)} km²</strong>
-          </div>
-        </div>
+      {country.flag && <div className="flag-wrap"><img className="country-flag" src={country.flag} alt={`${t('flagOf')} ${displayName}`} /></div>}
+      <div className="facts-grid">
+        <div className="fact"><span className="fact-label">{t('capital')}</span><strong>{country.capital.join(', ') || t('notListed')}</strong></div>
+        <div className="fact"><span className="fact-label">{t('region')}</span><strong>{localizedRegion(country.region, language)}</strong></div>
+        <div className="fact"><span className="fact-label">{t('population')}</span><strong>{numberFormat.format(country.population)}</strong></div>
+        <div className="fact"><span className="fact-label">{t('area')}</span><strong>{numberFormat.format(country.area)} {language === 'ar' ? 'كم²' : language === 'he' ? 'קמ״ר' : 'km²'}</strong></div>
       </div>
+      {!compact && language === 'en' && country.subregion && <p className="subregion-note">{t('partOf')} {country.subregion}</p>}
     </article>
   )
 }

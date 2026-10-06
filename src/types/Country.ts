@@ -1,27 +1,29 @@
-export type CountryListItem = {
+export interface CountryOption {
   name: string
   cca2: string
   region: string
 }
 
-export type CountryDetails = {
+export interface CountryDetails {
   name: string
-  capital: string
+  officialName: string
+  cca2: string
+  capital: string[]
   region: string
-  population: number | null
-  populationYear: number | null
-  populationSource: string | null
+  subregion: string
+  population: number
   area: number
-  flags: {
-    png: string
-    alt: string
-  }
+  flag: string
+  flagAlt: string
 }
 
-export type SearchHistoryItem = {
+export interface SearchRecord {
   id: string
-  searchTime: string
+  searchedAt: string
   country: string
+  cca2?: string
   capital: string
   region: string
 }
+
+export type RegionFilter = 'All regions' | 'Africa' | 'Americas' | 'Asia' | 'Europe' | 'Oceania' | 'Antarctic'

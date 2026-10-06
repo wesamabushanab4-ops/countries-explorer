@@ -1,39 +1,19 @@
 import CountryCard from '../components/CountryCard'
-import PageHeader from '../components/PageHeader'
+import EmptyState from '../components/EmptyState'
+import { useTranslation } from '../i18n'
 import type { CountryDetails } from '../types/Country'
 
-type FavoritesProps = {
-  favorites: CountryDetails[]
-  onRemoveFavorite: (countryName: string) => void
-}
+interface FavoritesProps { favorites: CountryDetails[]; toggleFavorite: (country: CountryDetails) => void }
 
-export default function Favorites({ favorites, onRemoveFavorite }: FavoritesProps) {
+export default function Favorites({ favorites, toggleFavorite }: FavoritesProps) {
+  const { t } = useTranslation()
   return (
-    <section className="page-section">
-      <PageHeader
-        kicker="Your personal atlas"
-        title="Favorite countries"
-        description="A collection of places you want to remember."
-        variant="favorites"
-      />
-
-      {favorites.length === 0 ? (
-        <div className="empty-state">
-          <strong>Your collection is waiting</strong>
-          <span>Add a country to favorites and it will be saved here.</span>
-        </div>
-      ) : (
-        <div className="favorites-grid">
-          {favorites.map((country) => (
-            <CountryCard
-              key={country.name}
-              country={country}
-              isFavorite
-              onRemoveFavorite={onRemoveFavorite}
-            />
-          ))}
-        </div>
-      )}
-    </section>
+    <main className="page-shell inner-page">
+      <section className="page-intro"><span className="eyebrow">{t('placesToKeep')}</span><h1>{t('lovedWorldOne')}<br /><em>{t('lovedWorldTwo')}</em></h1><p>{t('favoritesDescription')}</p></section>
+      <section className="content-panel"><div className="panel-heading"><div><span className="eyebrow">{t('savedPlaces')}</span><h2>{t('favorites')} <span className="count-pill">{favorites.length}</span></h2></div></div>
+        {favorites.length === 0 ? <EmptyState icon="♡" title={t('nothingSaved')} description={t('addFavoritesHint')} /> : <div className="favorites-grid">{favorites.map((country) => <CountryCard key={country.cca2} country={country} isFavorite onToggleFavorite={toggleFavorite} compact />)}</div>}
+      </section>
+      <footer className="page-footer"><span>{t('madeCurious')}</span><span>{t('favoritesStay')}</span></footer>
+    </main>
   )
 }

@@ -1,32 +1,25 @@
-# React + TypeScript + Vite
+# Countries Explorer
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+A responsive React + TypeScript + Vite country explorer built from the “Assignment 2 – Countries Explorer” brief.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+1. Install Node.js (version 18 or newer).
+2. Open a terminal in this folder and run `npm install`.
+3. Run `npm run dev` and open the local URL Vite prints.
 
-## React Compiler
+The app loads its bundled country and population datasets from `public/countries.json` and `public/populations.json`. No API key or external country-data service is required at runtime.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Included
 
-## Expanding the Oxlint configuration
+- Countries page with locally bundled country and population data.
+- Immediate lookup when a country is selected, with loading and error states.
+- Region filter, country flag, capital, region, formatted population, and area.
+- Search history with date and time, saved in this browser.
+- Favorites page, also saved in this browser.
+- About page and React Router navigation.
+- Responsive styling and accessible labels/focus states.
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+## Before presenting
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Replace “Student Developer” on the About page with your name and contact details.
